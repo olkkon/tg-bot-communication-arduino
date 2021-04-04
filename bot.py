@@ -37,13 +37,13 @@ def login(update: Update, _: CallbackContext) -> None:
     global logged_in
     
     if logged_in:
-        update.message.reply_text('Olet jo sisäänkirjautunut!')
+        update.message.reply_text('Olet jo sisällä...')
     else:
         if user.username in trusted_users:
             logged_in = True
-            update.message.reply_text('Sisäänkirjautuminen onnistui!')
+            update.message.reply_text(f'Tervetuloa, {user.first_name}!')
         else:
-            update.message.reply_text('Et voi kirjautua sisään tunnuksellasi.')
+            update.message.reply_text('Sori, tunnuksellasi ei ole pääsyä tälle botille.')
             
 def logout(update: Update, _: CallbackContext) -> None:
     user = update.effective_user
@@ -51,88 +51,90 @@ def logout(update: Update, _: CallbackContext) -> None:
     
     if logged_in:
         logged_in = False
-        update.message.reply_text('Uloskirjautuminen onnistui!')
+        update.message.reply_text('Uloskirjautuminen onnistui.')
     else:
-        update.message.reply_text('Olet jo uloskirjautuneena!')    
-    
-def Photo(update: Update, _: CallbackContext) -> None:
-    if logged_in:
-        update.message.reply_photo(photo=open('test.png','rb'))
-    else:
-        update.message.reply_text('Sinun pitää kirjautua ensin sisään.')
+        update.message.reply_text('Yritä ensin kirjautua sisään ;)')    
     
 def default(update: Update, _: CallbackContext) -> None:
     update.message.reply_text('Hyväksyn vain komentoja. /help')
 
-def Photo(update: Update, _: CallbackContext) -> None:
+def photo(update: Update, _: CallbackContext) -> None:
     if logged_in:
         update.message.reply_photo(photo=open('test.png','rb'))
     else:
-        update.message.reply_text('Sinun pitää kirjautua ensin sisään.')
+        update.message.reply_text('Vain sisäänkirjautuneille..')
         
-def AddTrusted(update: Update, context: CallbackContext) -> None:
+def addtrusted(update: Update, context: CallbackContext) -> None:
     user = update.effective_user
     global trusted_users
     
+    # Allow superuser to add person to the trusted list
     if user.id == superuser:
-        to_be_added = context.args[0]
-        if to_be_added in trusted_users:
-            update.message.reply_text('Käyttäjä löytyy jo luotettujen listalta!')
+        if not context.args:
+            update.message.reply_text('Kenet pitäisi lisätä?')
         else:
-            # Kirjoitetaan uusi luotettava ID talteen tiedostoon
-            with open("trusted.txt", "a+") as file_object:
-                file_object.seek(0)
-                file_object.write("\n")
-                file_object.write(to_be_added)
-            trusted_users = np.append(trusted_users, to_be_added)
-            update.message.reply_text(f'Lisättiin @{to_be_added} luotettujen listalle.')   
+            to_be_added = context.args[0]
+            if to_be_added in trusted_users:
+                update.message.reply_text('Käyttäjä löytyy jo listalta.')
+            else:
+                with open("trusted.txt", "a+") as file_object:
+                    file_object.seek(0)
+                    file_object.write("\n")
+                    file_object.write(to_be_added)
+                trusted_users = np.append(trusted_users, to_be_added)
+                update.message.reply_text(f'Lisättiin @{to_be_added} listalle.')   
         
     elif logged_in:
-        update.message.reply_text('Vain botin ylläpitäjä voi lisätä uusia luotettuja henkilöitä.')
+        update.message.reply_text('Vain ylläpitäjällä on oikeus tähän komentoon.')
     else:
         update.message.reply_text('Tämä toiminnallisuus ei ole yleisessä käytössä.')
         
-def RemoveTrusted(update: Update, context: CallbackContext) -> None:
+def removetrusted(update: Update, context: CallbackContext) -> None:
     user = update.effective_user
     global trusted_users
     
+    # Allow superuser to delete trusted person from list
     if user.id == superuser:
-        # Poistetaan haluttu ID luettelosta, jos se vain on mahdollista
-        to_be_deleted = context.args[0]
-        found = False
-        
-        with open('trusted.txt', 'r') as file_in:
-            for line in file_in:
-                if line.strip() == to_be_deleted.strip():
-                    found = True
-            
-        if not found:
-            update.message.reply_text(f'Käyttäjänimeä @{to_be_deleted} ei löytynyt luotettujen listalta.')   
+        if not context.args:
+            update.message.reply_text('Kenet pitäisi poistaa?')
         else:
-            os.rename('trusted.txt','trusted_old.txt')
-            with open('trusted_old.txt') as old, open('trusted.txt', 'w') as new:
-                for line in old:
-                    if not to_be_deleted.strip() in line.strip():
-                        new.write(line)
-            os.remove('trusted_old.txt')
-            trusted_users = np.delete(trusted_users, np.argwhere(trusted_users==to_be_deleted))
-            update.message.reply_text(f'Käyttäjänimi @{to_be_deleted} poistettiin luotettujen listalta.')
+            to_be_deleted = context.args[0]
+            found = False
+        
+            with open('trusted.txt', 'r') as file_in:
+                for line in file_in:
+                    if line.strip() == to_be_deleted.strip():
+                        found = True
+            
+            if not found:
+                update.message.reply_text(f'Käyttäjänimeä @{to_be_deleted} ei löytynyt listalta.')   
+            else:
+                os.rename('trusted.txt','trusted_old.txt')
+                with open('trusted_old.txt') as old, open('trusted.txt', 'w') as new:
+                    for line in old:
+                        if not to_be_deleted.strip() in line.strip():
+                            new.write(line)
+                os.remove('trusted_old.txt')
+                trusted_users = np.delete(trusted_users, np.argwhere(trusted_users==to_be_deleted))
+                update.message.reply_text(f'Käyttäjänimi @{to_be_deleted} poistettiin listalta.')
 
     elif logged_in:
-        update.message.reply_text('Vain botin ylläpitäjä voi poistaa luotettuja henkilöitä.')
+        update.message.reply_text('Vain ylläpitäjällä on oikeus tähän komentoon.')
     else:
-        update.message.reply_text('Tämä toiminnallisuus ei ole yleisessä käytössä.')
+        update.message.reply_text('Tämä toiminnallisuus ei ole yleisessä käytössä.')        
         
-def Trusted(update: Update, context: CallbackContext) -> None:
+   
+        
+def trusted(update: Update, context: CallbackContext) -> None:
     user = update.effective_user
     if user.id == superuser:
-        # Listataan kaikki luotetut henkilöt
+        # List all trusted persons
         msg = 'Luotetut henkilöt:\n'
-        for person in trusted_users:
+        for person in trusted_users.ravel():
             msg = msg + "@" + person + "\n"
         update.message.reply_text(msg)
     elif logged_in:
-        update.message.reply_text('Vain botin ylläpitäjä voi tarkastella luotettujen henkilöiden listaa.')
+        update.message.reply_text('Vain ylläpitäjällä on oikeus tähän komentoon.')
     else:
         update.message.reply_text('Tämä toiminnallisuus ei ole yleisessä käytössä.')
 
@@ -149,10 +151,11 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("help", help_command))
     dispatcher.add_handler(CommandHandler("login", login))
     dispatcher.add_handler(CommandHandler("logout", logout))
-    dispatcher.add_handler(CommandHandler("photo", Photo))
-    dispatcher.add_handler(CommandHandler("addtrusted", AddTrusted))
-    dispatcher.add_handler(CommandHandler("removetrusted", RemoveTrusted))
-    dispatcher.add_handler(CommandHandler("trusted", Trusted))
+    dispatcher.add_handler(CommandHandler("photo", photo))
+    dispatcher.add_handler(CommandHandler("addtrusted", addtrusted))
+    dispatcher.add_handler(CommandHandler("removetrusted", removetrusted))
+    dispatcher.add_handler(CommandHandler("deletetrusted", removetrusted))
+    dispatcher.add_handler(CommandHandler("trusted", trusted))
     
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, default))
 
