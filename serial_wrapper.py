@@ -31,45 +31,65 @@ def establish_connection():
 
 # Encode data and send it to arduino. Read result and return it
 def write_read(x):
-    arduino.write(bytes(x, 'utf-8'))
-    time.sleep(0.05)
-    data = arduino.readline()
+    tries, data = 0,0
+    while tries < maximum_iteration and not data:
+        arduino.write(bytes(x, 'utf-8'))
+        time.sleep(0.05)
+        data = arduino.readline()
+        tries += 1
     return data
     
-# Send boolean value to arduino and return whether the query was successful or not
-def send_boolean_to_arduino(b: bool):
+# NOTE TO FOLLOWING FUNCTIONS:
+# Arduino might sometimes return some trash, which causes utf-8 decode to throw UnicodeDecodeError.
+# In this case, we just return false for the main function and let user try the operation again. The reason
+# for this is that they are so rare and complicated to deal with.
+
+# Toggle a led connected to arduino to value given in the parameter.
+# Returns boolean whether the operation was successful and description as string if not.
+def toggle_led(b: bool):
     s = '1' if b else '0'
-    
-    # A helper function for trying to read data from arduino. Usually result
-    # comes after 3-4 tries, but sometimes it may take longer or not come at all
-    def try_to_read_data(upper_limit: int, var: bool):
-        tries = 0
-        raw = write_read(var)
-        while tries < upper_limit and not raw:
-            raw = write_read(var)
-            tries += 1
-        return raw
     
     # Stop function if the connection can not be established
     conn, desc = establish_connection()
     if not conn: 
         return conn, desc
         
-    # Arduino might sometimes return some trash, which causes utf-8 decode to throw UnicodeDecodeError.
-    # In this case, we just return false for the main function and let user try the operation again. The reason
-    # for this is that they are so rare and complicated to deal with
-    res = try_to_read_data(maximum_iteration,s)
+    res = write_read(f"w{s}")
     if not res:
         return False, 'connection timed out, too many tries'
     else:
         try:
             value = res.decode('utf-8')
-            if value == 'S':
+            if value[0] == 'S':
                 return True, None
             else:
                 return False, 'arduino returned error code'
         except UnicodeDecodeError:
             return False, 'problems with utf-8 decoding'
+
+# Get current led state. 
+# Returns boolean whether the operation was successful and description,
+# where in the positive case is led state and in fail case the description of the error.
+def get_led_state():
+    # Stop function if the connection can not be established
+    conn, desc = establish_connection()
+    if not conn: 
+        return conn, desc
+        
+    res = write_read('r')
+    if not res:
+        return False, 'connection timed out, too many tries'
+    else:
+        try:
+            value = res.decode('utf-8')
+            if value[0] == 'A':
+                s = True if value[1] == '1' else False
+                return True, s
+            else:
+                return False, 'arduino returned error code'
+        except UnicodeDecodeError:
+            return False, 'problems with utf-8 decoding'
+
             
             
                 
