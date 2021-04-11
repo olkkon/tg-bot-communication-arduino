@@ -5,6 +5,7 @@ import os
 
 from telegram import Update, ForceReply
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from serial_wrapper import send_boolean_to_arduino
 
 # Enable logging
 logging.basicConfig(
@@ -32,7 +33,7 @@ def start(update: Update, _: CallbackContext) -> None:
 
 def help_command(update: Update, _: CallbackContext) -> None:
     if logged_in:
-        update.message.reply_text("""Sisäänkirjautuneena käyttäjänä voit käyttää seuraavia komentoja: \n/logout kirjaudu ulos\n/photo lähetä kuva\n/help näytä tämä teksti""")
+        update.message.reply_text("""Sisäänkirjautuneena käyttäjänä voit käyttää seuraavia komentoja: \n/logout kirjaudu ulos\n/photo lähetä kuva\n/help näytä tämä teksti\n/led ohjaa arduinoon liitettyä lediä""")
     else:
         update.message.reply_text("""Ilman sisäänkirjautumista voit käyttää seuraavia komentoja: \n/login kirjaudu sisään\n/help näytä tämä teksti""")
     
@@ -59,8 +60,11 @@ def logout(update: Update, _: CallbackContext) -> None:
     else:
         update.message.reply_text('Yritä ensin kirjautua sisään ;) /login')    
     
-def default(update: Update, _: CallbackContext) -> None:
+def default_text(update: Update, _: CallbackContext) -> None:
     update.message.reply_text('Hyväksyn vain komentoja. /help')
+    
+def default_command(update: Update, _: CallbackContext) -> None:
+    update.message.reply_text('Tuntematon komento. /help')
 
 def photo(update: Update, _: CallbackContext) -> None:
     global logged_in
@@ -138,7 +142,36 @@ def trusted(update: Update, context: CallbackContext) -> None:
         update.message.reply_text('Vain ylläpitäjällä on oikeus tähän komentoon.')
     else:
         update.message.reply_text('Tämä toiminnallisuus ei ole yleisessä käytössä.')
-            
+        
+def led(update: Update, context: CallbackContext) -> None:
+    global logged_in
+    status = verify_login_status(update.effective_user.username)
+    
+    # Allow logged in users to control the external led
+    if status == LOGIN_FOUND:
+        if not context.args:
+            update.message.reply_text('Muista valita asetusvaihtoehto on/off')
+        else:
+            setting = context.args[0]
+            if setting == 'on':
+                setting = True
+            elif setting == 'off':
+                setting = False
+                
+            return_value, desc = send_boolean_to_arduino(setting)    
+            if return_value:
+                if setting:
+                    update.message.reply_text('Ledi päällä!')
+                else:
+                    update.message.reply_text('Ledi pois päältä!')
+            else:
+                update.message.reply_text(f'Asetusta ei voitu muuttaa. Virhe: {desc}')
+    elif status == LOGIN_EXPIRED:
+        logged_in = False
+        update.message.reply_text('Sinut on poistettu luotettujen listalta. Kirjaudutaan ulos..')
+    else:
+        update.message.reply_text('Vain sisäänkirjautuneille.. /login')
+    
         
 def verify_login_status(user: str):
     if logged_in:
@@ -176,8 +209,9 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("removetrusted", remove_trusted))
     dispatcher.add_handler(CommandHandler("deletetrusted", remove_trusted))
     dispatcher.add_handler(CommandHandler("trusted", trusted))
+    dispatcher.add_handler(CommandHandler("led", led))
     
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, default))
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, default_text))
 
     # Start the Bot
     updater.start_polling()
